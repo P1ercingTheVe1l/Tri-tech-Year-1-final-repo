@@ -1,5 +1,5 @@
 using UnityEngine;
-using UnityEngine.UI;
+using TMPro;
 
 namespace TTY1
 {
@@ -9,8 +9,11 @@ namespace TTY1
         public static PlayerUI Instance { get; private set; }
 
         [Header("References")]
-        public Image healthBar;         
-        public Image crosshair;         
+        [Tooltip("Optional TMP text used to display current / max health (e.g. \"75 / 100\").")]
+        public TextMeshProUGUI healthText;
+
+        [Tooltip("Optional crosshair at screen center")]
+        public UnityEngine.UI.Image crosshair;
 
         private void Awake()
         {
@@ -23,14 +26,23 @@ namespace TTY1
             Instance = this;
         }
 
-       
+  
         public Vector2 ScreenCenter => new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
 
-      
+  
+        public void SetHealth(int current, int max)
+        {
+            if (healthText == null) return;
+            healthText.text = $"{current} / {max}";
+        }
+
+    
         public void SetHealthFraction(float fraction)
         {
-            if (healthBar == null) return;
-            healthBar.fillAmount = Mathf.Clamp01(fraction);
+            if (healthText == null) return;
+            fraction = Mathf.Clamp01(fraction);
+            int percent = Mathf.RoundToInt(fraction * 100f);
+            healthText.text = $"{percent}%";
         }
     }
 }
