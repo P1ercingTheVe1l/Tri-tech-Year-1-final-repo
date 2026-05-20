@@ -12,6 +12,25 @@ namespace TTY1
         public float MouseSensitivity = 1f;
         public float Gravity = -9.81f;
 
+        [Header("Acceleration")]
+        [Tooltip("How quickly the player reaches MoveSpeed (units/sec^2)")]
+        public float Acceleration = 40f;
+        [Tooltip("How quickly the player slows to a stop (units/sec^2)")]
+        public float Deceleration = 50f;
+        [Tooltip("Multiplier applied to deceleration when there's no input to create a slidey stop (0..1). Lower = more slide.")]
+        [Range(0f, 1f)]
+        public float StopSlideFactor = 0.35f;
+
+        [Header("Turn resistance")]
+        [Tooltip("When changing direction, how much to reduce acceleration (0..1). Lower = harder to turn into opposite direction.")]
+        [Range(0f, 1f)]
+        public float TurnAccelMultiplier = 0.35f;
+        [Tooltip("When changing direction, how much to increase deceleration. (>1 increases braking when reversing)")]
+        public float TurnDecelMultiplier = 1.6f;
+        [Tooltip("Alignment dot threshold below which turning penalties start to apply (-1..1). Lower allows sharper turns before penalty.")]
+        [Range(-1f, 1f)]
+        public float TurnPenaltyThreshold = 0.2f;
+
         [Header("Crouch")]
         [Tooltip("How far the camera moves down when crouching (meters).")]
         public float CrouchHeight = 0.5f;
@@ -40,6 +59,9 @@ namespace TTY1
         private Vector3 _cameraOriginalLocalPos;
         private Vector3 _cameraCrouchLocalPos;
         private bool _isDead;
+
+        // horizontal movement state used for accel/decel smoothing
+        private Vector3 _currentHorizontalVelocity = Vector3.zero;
 
         private void Awake()
         {
@@ -134,11 +156,67 @@ namespace TTY1
             float horizontal = moveInput.x;
             float vertical = moveInput.y;
 
-            Vector3 move = transform.right * horizontal + transform.forward * vertical;
-            if (move.sqrMagnitude > 1f) move.Normalize();
+            // Build world-space desired direction using the player's transform
+            Vector3 desiredDirection = transform.right * horizontal + transform.forward * vertical;
+            // preserve analog magnitude (so stick pressure scales speed)
+            float inputMagnitude = Mathf.Clamp01(new Vector2(horizontal, vertical).magnitude);
 
-            // apply horizontal movement
-            _controller.Move(move * MoveSpeed * Time.deltaTime);
+            Vector3 desiredVelocity = (desiredDirection.sqrMagnitude > 0.0001f)
+                ? desiredDirection.normalized * MoveSpeed * inputMagnitude
+                : Vector3.zero;
+
+            // choose acceleration vs deceleration depending on whether target speed is higher
+            float currentSpeed = _currentHorizontalVelocity.magnitude;
+            float targetSpeed = desiredVelocity.magnitude;
+
+            // base rate before turn adjustments
+            float rate;
+            if (targetSpeed > currentSpeed + 0.001f)
+            {
+                rate = Acceleration;
+            }
+            else
+            {
+                // When there's no input (targetSpeed ~= 0) reduce deceleration to create a slidey stop.
+                if (targetSpeed <= 0.01f)
+                    rate = Deceleration * StopSlideFactor;
+                else
+                    rate = Deceleration;
+            }
+
+            // Apply turn-resistance: if current velocity points sufficiently away from desired direction,
+            // make it harder to accelerate into that direction and increase braking when reversing.
+            if (_currentHorizontalVelocity.sqrMagnitude > 0.0001f && desiredVelocity.sqrMagnitude > 0.0001f)
+            {
+                Vector3 curDir = _currentHorizontalVelocity.normalized;
+                Vector3 desDir = desiredVelocity.normalized;
+                float alignment = Vector3.Dot(curDir, desDir); // 1 = same, -1 = opposite
+
+                if (alignment < TurnPenaltyThreshold)
+                {
+                    // map alignment from [TurnPenaltyThreshold..-1] to [1..0] range for interpolation
+                    float t = Mathf.InverseLerp(TurnPenaltyThreshold, -1f, alignment);
+
+                    if (targetSpeed > currentSpeed + 0.001f)
+                    {
+                        // reduce acceleration smoothly based on t
+                        float accelMultiplier = Mathf.Lerp(1f, TurnAccelMultiplier, t);
+                        rate = Mathf.Max(0.001f, rate * accelMultiplier);
+                    }
+                    else
+                    {
+                        // increase deceleration smoothly when reversing/turning
+                        float decelMultiplier = Mathf.Lerp(1f, TurnDecelMultiplier, t);
+                        rate = Mathf.Max(0.001f, rate * decelMultiplier);
+                    }
+                }
+            }
+
+            // smoothly move current velocity towards desired velocity
+            _currentHorizontalVelocity = Vector3.MoveTowards(_currentHorizontalVelocity, desiredVelocity, rate * Time.deltaTime);
+
+            // apply horizontal movement (velocity is units/sec)
+            _controller.Move(_currentHorizontalVelocity * Time.deltaTime);
 
             // gravity
             if (_controller.isGrounded && _verticalVelocity.y < 0f)
@@ -200,6 +278,7 @@ namespace TTY1
             // freeze player movement and show cursor; any death handling can be added by the user
             MoveSpeed = 0f;
             _verticalVelocity = Vector3.zero;
+            _currentHorizontalVelocity = Vector3.zero;
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
         }
