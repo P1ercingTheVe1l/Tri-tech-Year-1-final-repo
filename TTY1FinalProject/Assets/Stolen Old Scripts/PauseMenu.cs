@@ -1,10 +1,9 @@
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using TMPro;
 
-namespace AmesGame
+namespace TTY1
 {
     public class PauseMenu : MonoBehaviour
     {
@@ -18,22 +17,6 @@ namespace AmesGame
         public TextMeshProUGUI pauseTitleText;
         [Tooltip("Legacy UI Text fallback if not using TMP")]
         public Text pauseTitleLegacy;
-
-        [Header("Perk list")]
-        [Tooltip("Optional. If empty the player's PerkController will be found at runtime.")]
-        public PerkController perkController;
-
-        [Tooltip("Author UI slots in the editor (drag Image/TMP fields). The script will populate these slots with the player's chosen perks.")]
-        public List<PerkDisplaySlot> presetSlots = new List<PerkDisplaySlot>();
-
-        [System.Serializable]
-        public class PerkDisplaySlot
-        {
-            [Tooltip("Icon Image for the slot. If left empty the script will attempt to find an Image under the label's parent or a child named 'Elements'.")]
-            public Image iconImage;
-            [Tooltip("Label text for the perk name + key (use TMP_Text)")]
-            public TextMeshProUGUI labelText;
-        }
 
         [Header("Player Rotation")]
         [Tooltip("If assigned this MonoBehaviour will be disabled while paused to stop rotation (e.g. a look script).")]
@@ -64,9 +47,6 @@ namespace AmesGame
 
             if (pauseTitleLegacy != null)
                 pauseTitleLegacy.gameObject.SetActive(false);
-
-            // Hide any preset slot visuals until the player presses Escape
-            ClearPerkList();
 
             if (resumeButton != null)
             {
@@ -116,11 +96,6 @@ namespace AmesGame
 
             if (playerLook != null) playerLook.enabled = false;
             if (playerController != null) playerController.enabled = false;
-
-            // Pause enemy movement/shooting while pause menu is open
-            EnemyController.AddUiPause();
-
-            PopulatePerkList();
         }
 
         public void Resume()
@@ -149,11 +124,6 @@ namespace AmesGame
 
             if (playerLook != null) playerLook.enabled = true;
             if (playerController != null) playerController.enabled = true;
-
-            // Restore enemy movement/shooting
-            EnemyController.RemoveUiPause();
-
-            ClearPerkList();
         }
 
         private void OnMainMenuPressed()
@@ -166,116 +136,6 @@ namespace AmesGame
                 SceneManager.LoadScene(mainMenuSceneName);
             else
                 Debug.LogWarning("PauseMenu: mainMenuSceneName not set.");
-        }
-
-        public void PopulatePerkList()
-        {
-            // Only support preset authored slots now. If none provided, do nothing.
-            if (presetSlots == null || presetSlots.Count == 0) return;
-
-            // Ensure we reference the player's PerkController if none assigned
-            if (perkController == null)
-            {
-                if (playerController != null)
-                {
-                    perkController = playerController.GetComponent<PerkController>();
-                }
-
-                if (perkController == null)
-                {
-                    // Use the newer API to find a PerkController instance in the scene
-                    perkController = UnityEngine.Object.FindFirstObjectByType<PerkController>();
-                }
-            }
-
-            // gather chosen perks
-            List<PerkController.PerkSlot> chosen = new List<PerkController.PerkSlot>();
-            if (perkController != null)
-            {
-                foreach (var slot in perkController.perkSlots)
-                {
-                    if (slot == null || slot.perk == null) continue;
-                    if (!slot.chosen) continue;
-                    chosen.Add(slot);
-                }
-            }
-
-            // populate preset slots, hide image if there's no perk for the slot
-            for (int i = 0; i < presetSlots.Count; i++)
-            {
-                var display = presetSlots[i];
-                if (display == null) continue;
-
-                bool hasPerk = i < chosen.Count;
-
-                if (!hasPerk)
-                {
-                    if (display.iconImage != null)
-                        display.iconImage.gameObject.SetActive(false);
-                    if (display.labelText != null)
-                        display.labelText.text = string.Empty;
-                    continue;
-                }
-
-                var slot = chosen[i];
-                string perkName = string.IsNullOrEmpty(slot.perk.perkName) ? slot.perk.name : slot.perk.perkName;
-                string keyText = slot.mode == PerkMode.Active ? $" [{slot.activationKey}]" : " (Passive)";
-                string labelText = $"{perkName}{keyText}";
-
-                if (display.labelText != null)
-                    display.labelText.text = labelText;
-
-                // icon: if iconImage assigned in inspector use it; otherwise try to find under label's parent or a child named 'Elements'
-                Image img = display.iconImage;
-                if (img == null && display.labelText != null)
-                {
-                    var parent = display.labelText.transform.parent;
-                    if (parent != null)
-                    {
-                        var elements = parent.Find("Elements");
-                        if (elements != null)
-                        {
-                            img = elements.GetComponentInChildren<Image>(true);
-                        }
-
-                        if (img == null)
-                        {
-                            img = parent.GetComponentInChildren<Image>(true);
-                        }
-                    }
-                }
-
-                if (img != null)
-                {
-                    if (slot.perk.icon != null)
-                    {
-                        img.gameObject.SetActive(true);
-                        img.sprite = slot.perk.icon;
-                        img.color = Color.white;
-                        img.enabled = true;
-                    }
-                    else
-                    {
-                        img.gameObject.SetActive(false);
-                    }
-                }
-            }
-        }
-
-        private void ClearPerkList()
-        {
-            // reset presetSlots: hide and clear text
-            if (presetSlots != null)
-            {
-                foreach (var display in presetSlots)
-                {
-                    if (display == null) continue;
-                    if (display.iconImage != null)
-                        display.iconImage.gameObject.SetActive(false);
-                    if (display.labelText != null)
-                        display.labelText.text = string.Empty;
-                }
-            }
         }
     }
 }

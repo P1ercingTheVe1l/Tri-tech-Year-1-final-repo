@@ -1,56 +1,58 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-public class MainMenu : MonoBehaviour
+namespace TTY1
 {
-    [Header("Scene Names")]
-    [SerializeField] private string playSceneName;
-    [SerializeField] private string creditsSceneName;
-    [SerializeField] private string playHowToPlay;
-
-
-    // Play button
-    public void PlayGame()
+    public class MainMenu : MonoBehaviour
     {
-        if (!string.IsNullOrEmpty(playSceneName))
-        {
-            SceneManager.LoadScene(playSceneName);
-        }
-        else
-        {
-            Debug.LogWarning("Play scene not assigned!");
-        }
-    }
+        [Header("Scene Names")]
+        [SerializeField] private string playSceneName;
+        [SerializeField] private string creditsSceneName;
+        [SerializeField] private string playHowToPlay;
 
-    // Credits button
-    public void ShowCredits()
-    {
-        if (!string.IsNullOrEmpty(creditsSceneName))
+        // Play button
+        public void PlayGame()
         {
-            SceneManager.LoadScene(creditsSceneName);
+            if (!string.IsNullOrEmpty(playSceneName))
+            {
+                SceneManager.LoadScene(playSceneName);
+            }
+            else
+            {
+                Debug.LogWarning("Play scene not assigned!");
+            }
         }
-        else
-        {
-            Debug.LogWarning("Credits scene not assigned!");
-        }
-    }
 
-    // Quit button
-    public void QuitGame()
-    {
-        Debug.Log("Quit Game");
-
-        Application.Quit();
-    }
-    public void HowToPlay()
-    {
-        if (!string.IsNullOrEmpty(playHowToPlay))
+        // Credits button
+        public void ShowCredits()
         {
-            SceneManager.LoadScene(playHowToPlay);
+            if (!string.IsNullOrEmpty(creditsSceneName))
+            {
+                SceneManager.LoadScene(creditsSceneName);
+            }
+            else
+            {
+                Debug.LogWarning("Credits scene not assigned!");
+            }
         }
-        else
+
+        // Quit button
+        public void QuitGame()
         {
-            Debug.LogWarning("How To Play scene not assigned!");
+            Debug.Log("Quit Game");
+            Application.Quit();
+        }
+
+        public void HowToPlay()
+        {
+            if (!string.IsNullOrEmpty(playHowToPlay))
+            {
+                SceneManager.LoadScene(playHowToPlay);
+            }
+            else
+            {
+                Debug.LogWarning("How To Play scene not assigned!");
+            }
         }
     }
 }

@@ -1,31 +1,37 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-public class DeathScreen : MonoBehaviour
+namespace TTY1
 {
-    public GameObject deathScreenUI;
-
-    void Start()
+    public class DeathScreenUI : MonoBehaviour
     {
-        deathScreenUI.SetActive(false);
+        public GameObject deathScreenUI;
 
-    }
+        void Start()
+        {
+            if (deathScreenUI != null)
+                deathScreenUI.SetActive(false);
+        }
 
-    public void ShowDeathScreen()
-    {
-        deathScreenUI.SetActive(true);
-        Time.timeScale = 0f;
-    }
+        public void ShowDeathScreen()
+        {
+            if (deathScreenUI != null)
+            {
+                deathScreenUI.SetActive(true);
+                Time.timeScale = 0f;
+            }
+        }
 
-    public void RestartGame()
-    {
-        Time.timeScale = 1f;
-        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
-    }
+        public void RestartGame()
+        {
+            Time.timeScale = 1f;
+            SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+        }
 
-    public void ReturnToMainMenu()
-    {
-        Time.timeScale = 1f;
-        SceneManager.LoadScene("MainMenu");
+        public void ReturnToMainMenu()
+        {
+            Time.timeScale = 1f;
+            SceneManager.LoadScene("MainMenu");
+        }
     }
 }

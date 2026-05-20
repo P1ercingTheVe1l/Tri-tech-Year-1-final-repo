@@ -2,425 +2,395 @@ using UnityEngine;
 using UnityEngine.AI;
 using UnityEngine.UI;
 using System;
-using AmesGame;
-public class EnemyController : MonoBehaviour
+
+namespace TTY1
 {
-    // Global multiplier applied to incoming damage. Perks can modify this.
-    public static float DamageMultiplier = 1f;
-
-    // Event fired when any enemy dies (used by perks like "In a Rush")
-    public static event Action<GameObject> OnEnemyKilled;
-
-    public event Action OnEnemyDied;
-
-    // UI pause refcount: when > 0 enemies should stop moving/shooting
-    private static int s_uiPauseRefCount = 0;
-
-    public static void AddUiPause()
+    [RequireComponent(typeof(NavMeshAgent))]
+    public class EnemyController : MonoBehaviour
     {
-        s_uiPauseRefCount++;
-    }
+        // Global multiplier applied to incoming damage. Perks can modify this.
+        public static float DamageMultiplier = 1f;
 
-    public static void RemoveUiPause()
-    {
-        s_uiPauseRefCount = Mathf.Max(0, s_uiPauseRefCount - 1);
-    }
+        // Event fired when any enemy dies (used by perks like "In a Rush")
+        public static event Action<GameObject> OnEnemyKilled;
 
-    // Shooting
-    public GameObject bulletPrefab;
-    public Transform firePoint;
-    public float fireRate = 2f;
-    public float bulletSpeed = 15f;
-    private float nextFireTime = 0f;
+        public event Action OnEnemyDied;
 
-    // Audio
-    [Tooltip("Sound played when this enemy fires")]
-    public AudioClip shootSound;
-    [Tooltip("Sound played when this enemy dies")]
-    public AudioClip deathSound;
-    private AudioSource audioSource;
+        // UI pause refcount: when > 0 enemies should stop moving/shooting
+        private static int s_uiPauseRefCount = 0;
 
-    // Simple ambient SFX (lightweight)
-    [Header("Ambient SFX (simple)")]
-    [Tooltip("Clips that can be played at random intervals")]
-    public AudioClip[] ambientClips;
-    [Tooltip("Minimum interval between ambient clips (seconds)")]
-    public float sfxMinInterval = 8f;
-    [Tooltip("Maximum interval between ambient clips (seconds)")]
-    public float sfxMaxInterval = 18f;
-    [Tooltip("Min volume for ambient clips")]
-    [Range(0f, 1f)]
-    public float sfxMinVolume = 0.8f;
-    [Tooltip("Max volume for ambient clips")]
-    [Range(0f, 1f)]
-    public float sfxMaxVolume = 1f;
-    [Tooltip("Start ambient SFX automatically")]
-    public bool sfxPlayOnStart = true;
-
-    private Coroutine sfxCoroutine;
-
-    // Fight music (shared)
-    [Header("Music")]
-    [Tooltip("Optional fight music clip played when player is within this distance")]
-    public AudioClip fightMusicClip;
-    [Tooltip("Distance at which fight music should start (0 = use chaseDistance)")]
-    public float fightMusicDistance = 0f;
-
-    // Shared fight-music audio source and refcount so only one source plays globally
-    private static AudioSource s_fightMusicSource;
-    private static int s_fightMusicRefCount = 0;
-    private bool _isInFightRange = false;
-
-    // Expose whether any enemy currently has the player in fight range
-    public static bool AnyEnemyInFightRange => s_fightMusicRefCount > 0;
-
-    // Movement
-    private GameObject player;
-    private NavMeshAgent agent;
-    public float chaseDistance = 10f;
-    public float stopDistance = 2f; // distance at which enemy should stop approaching the player
-    private Vector3 home;
-
-    // Health
-    public float health = 3;
-    public Image healthBar;
-    protected float maxHealth;
-
-    // Attack / contact damage (editable per-enemy)
-    [Header("Combat")]
-    [Tooltip("Damage this enemy deals to the player (contact/attack)")]
-    public int attackDamage = 1;
-
-    /// <summary>
-    /// Set the attack/contact damage for this enemy at runtime.
-    /// </summary>
-    public void SetAttackDamage(int damage)
-    {
-        attackDamage = damage;
-    }
-
-    /// <summary>
-    /// Get the current attack/contact damage for this enemy.
-    /// </summary>
-    public int GetAttackDamage()
-    {
-        return attackDamage;
-    }
-
-    /// <summary>
-    /// Modify attack damage by a signed delta (can be negative).
-    /// </summary>
-    public void ModifyAttackDamage(int delta)
-    {
-        attackDamage += delta;
-        if (attackDamage < 0) attackDamage = 0;
-    }
-
-    void Start()
-    {
-        // Find player
-        player = GameObject.FindGameObjectWithTag("Player");
-
-        // NavMesh setup
-        agent = GetComponent<NavMeshAgent>();
-        if (agent != null)
+        public static void AddUiPause()
         {
-            agent.stoppingDistance = stopDistance;
+            s_uiPauseRefCount++;
         }
 
-        // Audio setup: prefer an existing AudioSource, otherwise add one
-        audioSource = GetComponent<AudioSource>();
-        if (audioSource == null)
+        public static void RemoveUiPause()
         {
-            audioSource = gameObject.AddComponent<AudioSource>();
-            audioSource.playOnAwake = false;
+            s_uiPauseRefCount = Mathf.Max(0, s_uiPauseRefCount - 1);
         }
 
-        // Ensure ambient audio uses 2D playback by default so it is audible regardless of distance.
-        audioSource.spatialBlend = 0f;
+        // Shooting
+        public GameObject bulletPrefab;
+        public Transform firePoint;
+        public float fireRate = 2f;
+        public float bulletSpeed = 15f;
+        private float nextFireTime = 0f;
 
-        home = transform.position;
+        // Audio
+        [Tooltip("Sound played when this enemy fires")]
+        public AudioClip shootSound;
+        [Tooltip("Sound played when this enemy dies")]
+        public AudioClip deathSound;
+        private AudioSource audioSource;
 
-        // Health setup
-        maxHealth = health;
-        if (healthBar != null)
+        // Simple ambient SFX (lightweight)
+        [Header("Ambient SFX (simple)")]
+        [Tooltip("Clips that can be played at random intervals")]
+        public AudioClip[] ambientClips;
+        [Tooltip("Minimum interval between ambient clips (seconds)")]
+        public float sfxMinInterval = 8f;
+        [Tooltip("Maximum interval between ambient clips (seconds)")]
+        public float sfxMaxInterval = 18f;
+        [Tooltip("Min volume for ambient clips")]
+        [Range(0f, 1f)]
+        public float sfxMinVolume = 0.8f;
+        [Tooltip("Max volume for ambient clips")]
+        [Range(0f, 1f)]
+        public float sfxMaxVolume = 1f;
+        [Tooltip("Start ambient SFX automatically")]
+        public bool sfxPlayOnStart = true;
+
+        private Coroutine sfxCoroutine;
+
+        // Fight music (shared)
+        [Header("Music")]
+        [Tooltip("Optional fight music clip played when player is within this distance")]
+        public AudioClip fightMusicClip;
+        [Tooltip("Distance at which fight music should start (0 = use chaseDistance)")]
+        public float fightMusicDistance = 0f;
+
+        // Refcount to track enemies in fight range
+        private static int s_fightMusicRefCount = 0;
+        private bool _isInFightRange = false;
+
+        // Expose whether any enemy currently has the player in fight range
+        public static bool AnyEnemyInFightRange => s_fightMusicRefCount > 0;
+
+        // Movement
+        private GameObject player;
+        private NavMeshAgent agent;
+        public float chaseDistance = 10f;
+        public float stopDistance = 2f; // distance at which enemy should stop approaching the player
+        private Vector3 home;
+
+        // Health
+        public float health = 3;
+        public Image healthBar;
+        protected float maxHealth;
+
+        // Attack / contact damage (editable per-enemy)
+        [Header("Combat")]
+        [Tooltip("Damage this enemy deals to the player (contact/attack)")]
+        public int attackDamage = 1;
+
+        /// <summary>
+        /// Set the attack/contact damage for this enemy at runtime.
+        /// </summary>
+        public void SetAttackDamage(int damage)
         {
-            healthBar.fillAmount = health / maxHealth;
+            attackDamage = damage;
         }
 
-        // Start simple ambient SFX if requested
-        if (sfxPlayOnStart && ambientClips != null && ambientClips.Length > 0)
+        /// <summary>
+        /// Get the current attack/contact damage for this enemy.
+        /// </summary>
+        public int GetAttackDamage()
         {
-            StartAmbientSfx();
+            return attackDamage;
         }
 
-        // default fight music distance
-        if (fightMusicDistance <= 0f)
-            fightMusicDistance = chaseDistance;
-    }
-
-    private void OnEnable()
-    {
-        if (sfxPlayOnStart && ambientClips != null && ambientClips.Length > 0 && sfxCoroutine == null)
-            StartAmbientSfx();
-    }
-
-    private void OnDisable()
-    {
-        if (_isInFightRange)
+        /// <summary>
+        /// Modify attack damage by a signed delta (can be negative).
+        /// </summary>
+        public void ModifyAttackDamage(int delta)
         {
-            _isInFightRange = false;
-            StopSharedFightMusicIfNeeded();
+            attackDamage += delta;
+            if (attackDamage < 0) attackDamage = 0;
         }
 
-        StopAmbientSfx();
-    }
-
-    private void OnDestroy()
-    {
-        if (_isInFightRange)
+        void Start()
         {
-            _isInFightRange = false;
-            StopSharedFightMusicIfNeeded();
-        }
+            // Find player
+            player = GameObject.FindGameObjectWithTag("Player");
 
-        StopAmbientSfx();
-    }
-
-    protected virtual void Update()
-    {
-        // If any UI has requested a pause, stop movement and shooting logic here.
-        if (s_uiPauseRefCount > 0)
-        {
+            // NavMesh setup
+            agent = GetComponent<NavMeshAgent>();
             if (agent != null)
             {
-                agent.isStopped = true;
-                if (agent.velocity.sqrMagnitude > 0f)
-                    agent.velocity = Vector3.zero;
+                agent.stoppingDistance = stopDistance;
             }
-            return;
+
+            // Audio setup: prefer an existing AudioSource, otherwise add one
+            audioSource = GetComponent<AudioSource>();
+            if (audioSource == null)
+            {
+                audioSource = gameObject.AddComponent<AudioSource>();
+                audioSource.playOnAwake = false;
+            }
+
+            // Ensure ambient audio uses 2D playback by default so it is audible regardless of distance.
+            audioSource.spatialBlend = 0f;
+
+            home = transform.position;
+
+            // Health setup
+            maxHealth = health;
+            if (healthBar != null)
+            {
+                healthBar.fillAmount = health / maxHealth;
+            }
+
+            // Start simple ambient SFX if requested
+            if (sfxPlayOnStart && ambientClips != null && ambientClips.Length > 0)
+            {
+                StartAmbientSfx();
+            }
+
+            // default fight music distance
+            if (fightMusicDistance <= 0f)
+                fightMusicDistance = chaseDistance;
         }
 
-        if (player == null || agent == null) return;
-
-        float distance = Vector3.Distance(transform.position, player.transform.position);
-
-        // fight music handling (per-enemy detection, shared audio)
-        bool nowInRange = distance < Mathf.Max(0.0001f, fightMusicDistance);
-        if (nowInRange && !_isInFightRange)
+        private void OnEnable()
         {
-            _isInFightRange = true;
-            StartSharedFightMusicIfNeeded();
-        }
-        else if (!nowInRange && _isInFightRange)
-        {
-            _isInFightRange = false;
-            StopSharedFightMusicIfNeeded();
+            if (sfxPlayOnStart && ambientClips != null && ambientClips.Length > 0 && sfxCoroutine == null)
+                StartAmbientSfx();
         }
 
-        if (distance < chaseDistance)
+        private void OnDisable()
         {
-            if (distance > stopDistance)
+            if (_isInFightRange)
+            {
+                _isInFightRange = false;
+                StopSharedFightMusicIfNeeded();
+            }
+
+            StopAmbientSfx();
+        }
+
+        private void OnDestroy()
+        {
+            if (_isInFightRange)
+            {
+                _isInFightRange = false;
+                StopSharedFightMusicIfNeeded();
+            }
+
+            StopAmbientSfx();
+        }
+
+        protected virtual void Update()
+        {
+            // If any UI has requested a pause, stop movement and shooting logic here.
+            if (s_uiPauseRefCount > 0)
+            {
+                if (agent != null)
+                {
+                    agent.isStopped = true;
+                    if (agent.velocity.sqrMagnitude > 0f)
+                        agent.velocity = Vector3.zero;
+                }
+                return;
+            }
+
+            if (player == null || agent == null) return;
+
+            float distance = Vector3.Distance(transform.position, player.transform.position);
+
+            // fight music handling (per-enemy detection, shared audio)
+            bool nowInRange = distance < Mathf.Max(0.0001f, fightMusicDistance);
+            if (nowInRange && !_isInFightRange)
+            {
+                _isInFightRange = true;
+                StartSharedFightMusicIfNeeded();
+            }
+            else if (!nowInRange && _isInFightRange)
+            {
+                _isInFightRange = false;
+                StopSharedFightMusicIfNeeded();
+            }
+
+            if (distance < chaseDistance)
+            {
+                if (distance > stopDistance)
+                {
+                    agent.isStopped = false;
+                    agent.SetDestination(player.transform.position);
+                }
+                else
+                {
+                    agent.isStopped = true;
+                    if (agent.velocity.sqrMagnitude > 0f)
+                        agent.velocity = Vector3.zero;
+                }
+
+                transform.LookAt(player.transform);
+
+                if (Time.time >= nextFireTime)
+                {
+                    Shoot();
+                    nextFireTime = Time.time + fireRate;
+                }
+            }
+            else
             {
                 agent.isStopped = false;
-                agent.SetDestination(player.transform.position);
+                agent.SetDestination(home);
             }
-            else
+        }
+
+        void Shoot()
+        {
+            if (bulletPrefab == null || firePoint == null || player == null) return;
+
+            GameObject bullet = Instantiate(bulletPrefab, firePoint.position, firePoint.rotation);
+
+            Rigidbody rb = bullet.GetComponent<Rigidbody>();
+
+            if (rb != null)
             {
-                agent.isStopped = true;
-                if (agent.velocity.sqrMagnitude > 0f)
-                    agent.velocity = Vector3.zero;
+                Vector3 direction = (player.transform.position - firePoint.position).normalized;
+                rb.linearVelocity = direction * bulletSpeed;
             }
 
-            transform.LookAt(player.transform);
-
-            if (Time.time >= nextFireTime)
+            if (shootSound != null)
             {
-                Shoot();
-                nextFireTime = Time.time + fireRate;
+                if (audioSource != null)
+                {
+                    audioSource.PlayOneShot(shootSound);
+                }
+                else
+                {
+                    AudioSource.PlayClipAtPoint(shootSound, transform.position);
+                }
             }
         }
-        else
+
+        // Health
+        public virtual void TakeDamage(int damage)
         {
-            agent.isStopped = false;
-            agent.SetDestination(home);
-        }
-    }
+            float adjusted = damage * DamageMultiplier;
+            int applied = Mathf.Max(1, Mathf.RoundToInt(adjusted));
+            health -= applied;
 
-    void Shoot()
-    {
-        if (bulletPrefab == null || firePoint == null || player == null) return;
-
-        GameObject bullet = Instantiate(bulletPrefab, firePoint.position, firePoint.rotation);
-
-        Rigidbody rb = bullet.GetComponent<Rigidbody>();
-
-        if (rb != null)
-        {
-            Vector3 direction = (player.transform.position - firePoint.position).normalized;
-            rb.linearVelocity = direction * bulletSpeed;
-        }
-
-        if (shootSound != null)
-        {
-            if (audioSource != null)
+            if (healthBar != null)
             {
-                audioSource.PlayOneShot(shootSound);
+                healthBar.fillAmount = health / maxHealth;
             }
-            else
+
+            if (health <= 0)
             {
-                AudioSource.PlayClipAtPoint(shootSound, transform.position);
+                StopAmbientSfx();
+
+                if (deathSound != null)
+                {
+                    AudioSource.PlayClipAtPoint(deathSound, transform.position);
+                }
+
+                OnEnemyKilled?.Invoke(gameObject);
+                OnEnemyDied?.Invoke();
+
+                Destroy(gameObject);
             }
         }
-    }
 
-    // Health
-    public virtual void TakeDamage(int damage)
-    {
-        float adjusted = damage * DamageMultiplier;
-        int applied = Mathf.Max(1, Mathf.RoundToInt(adjusted));
-        health -= applied;
-
-        if (healthBar != null)
+        private void OnTriggerEnter(Collider other)
         {
-            healthBar.fillAmount = health / maxHealth;
-        }
-
-        if (health <= 0)
-        {
-            StopAmbientSfx();
-
-            if (deathSound != null)
+            if (other.gameObject.CompareTag("PlayerBullet"))
             {
-                AudioSource.PlayClipAtPoint(deathSound, transform.position);
+                var pd = other.gameObject.GetComponent<ProjectileDamage>();
+                int dmg = pd != null ? pd.damage : 1;
+                TakeDamage(dmg);
+                Destroy(other.gameObject);
             }
 
-            OnEnemyKilled?.Invoke(gameObject);
-            OnEnemyDied?.Invoke();
-
-            Destroy(gameObject);
-        }
-    }
-
-    private void OnTriggerEnter(Collider other)
-    {
-        if (other.gameObject.CompareTag("PlayerBullet"))
-        {
-            var pd = other.gameObject.GetComponent<ProjectileDamage>();
-            int dmg = pd != null ? pd.damage : 1;
-            TakeDamage(dmg);
-            Destroy(other.gameObject);
-        }
-
-        // Optional: contact damage to player on collision — call player's TakeDamage using attackDamage
-        if (other.gameObject.CompareTag("Player"))
-        {
-            var playerController = other.gameObject.GetComponent<PlayerController>();
-            if (playerController != null)
+            // Optional: contact damage to player on collision â€” call player's TakeDamage using attackDamage
+            if (other.gameObject.CompareTag("Player"))
             {
-                playerController.TakeDamage(attackDamage);
+                var playerController = other.gameObject.GetComponent<PlayerController>();
+                if (playerController != null)
+                {
+                    playerController.TakeDamage(attackDamage);
+                }
             }
         }
-    }
 
-    // --- Simple ambient SFX helpers ---
+        // --- Simple ambient SFX helpers ---
 
-    public void StartAmbientSfx()
-    {
-        if (sfxCoroutine != null) return;
-        sfxCoroutine = StartCoroutine(AmbientSfxLoop());
-    }
-
-    public void StopAmbientSfx()
-    {
-        if (sfxCoroutine != null)
+        public void StartAmbientSfx()
         {
-            StopCoroutine(sfxCoroutine);
-            sfxCoroutine = null;
-        }
-    }
-
-    private System.Collections.IEnumerator AmbientSfxLoop()
-    {
-        while (true)
-        {
-            float wait = Mathf.Max(0f, UnityEngine.Random.Range(sfxMinInterval, sfxMaxInterval));
-            yield return new WaitForSeconds(wait);
-
-            if (ambientClips == null || ambientClips.Length == 0) continue;
-
-            // Ensure we have a player reference
-            if (player == null)
-            {
-                player = GameObject.FindGameObjectWithTag("Player");
-                if (player == null) continue;
-            }
-
-            // Only play ambient SFX when the player is within the enemy's chase range
-            float distToPlayer = Vector3.Distance(transform.position, player.transform.position);
-            if (distToPlayer > chaseDistance) continue;
-
-            var clip = ambientClips[UnityEngine.Random.Range(0, ambientClips.Length)];
-            if (clip == null) continue;
-
-            float vol = Mathf.Clamp01(UnityEngine.Random.Range(sfxMinVolume, sfxMaxVolume));
-            if (audioSource != null)
-            {
-                audioSource.PlayOneShot(clip, vol);
-            }
-            else
-            {
-                AudioSource.PlayClipAtPoint(clip, transform.position, vol);
-            }
-        }
-    }
-
-    // --- Shared fight music helpers ---
-    private void StartSharedFightMusicIfNeeded()
-    {
-        if (fightMusicClip == null) return;
-
-        // increment refcount and pause player BG only when first enemy enters
-        s_fightMusicRefCount++;
-        if (s_fightMusicRefCount == 1)
-            PlayerController.PauseBgMusic();
-
-        if (s_fightMusicSource == null)
-        {
-            GameObject go = new GameObject("FightMusicSource");
-            DontDestroyOnLoad(go);
-            s_fightMusicSource = go.AddComponent<AudioSource>();
-            s_fightMusicSource.loop = true;
-            s_fightMusicSource.playOnAwake = false;
-            s_fightMusicSource.clip = fightMusicClip;
-            s_fightMusicSource.spatialBlend = 0f;
-            s_fightMusicSource.volume = 1f;
-            s_fightMusicSource.ignoreListenerPause = true;
+            if (sfxCoroutine != null) return;
+            sfxCoroutine = StartCoroutine(AmbientSfxLoop());
         }
 
-        if (s_fightMusicSource.clip == null)
-            s_fightMusicSource.clip = fightMusicClip;
-
-        if (!s_fightMusicSource.isPlaying)
-            s_fightMusicSource.Play();
-    }
-
-    private void StopSharedFightMusicIfNeeded()
-    {
-        if (s_fightMusicRefCount <= 0) return;
-
-        s_fightMusicRefCount = Mathf.Max(0, s_fightMusicRefCount - 1);
-        if (s_fightMusicRefCount == 0)
+        public void StopAmbientSfx()
         {
-            if (s_fightMusicSource != null)
+            if (sfxCoroutine != null)
             {
-                s_fightMusicSource.Stop();
-                Destroy(s_fightMusicSource.gameObject);
-                s_fightMusicSource = null;
+                StopCoroutine(sfxCoroutine);
+                sfxCoroutine = null;
             }
+        }
 
-            // resume the player's BG music when no enemies remain in fight range
-            PlayerController.ResumeBgMusic();
+        private System.Collections.IEnumerator AmbientSfxLoop()
+        {
+            while (true)
+            {
+                float wait = Mathf.Max(0f, UnityEngine.Random.Range(sfxMinInterval, sfxMaxInterval));
+                yield return new WaitForSeconds(wait);
+
+                if (ambientClips == null || ambientClips.Length == 0) continue;
+
+                // Ensure we have a player reference
+                if (player == null)
+                {
+                    player = GameObject.FindGameObjectWithTag("Player");
+                    if (player == null) continue;
+                }
+
+                // Only play ambient SFX when the player is within the enemy's chase range
+                float distToPlayer = Vector3.Distance(transform.position, player.transform.position);
+                if (distToPlayer > chaseDistance) continue;
+
+                var clip = ambientClips[UnityEngine.Random.Range(0, ambientClips.Length)];
+                if (clip == null) continue;
+
+                float vol = Mathf.Clamp01(UnityEngine.Random.Range(sfxMinVolume, sfxMaxVolume));
+                if (audioSource != null)
+                {
+                    audioSource.PlayOneShot(clip, vol);
+                }
+                else
+                {
+                    AudioSource.PlayClipAtPoint(clip, transform.position, vol);
+                }
+            }
+        }
+
+        // --- Shared fight music helpers ---
+        private void StartSharedFightMusicIfNeeded()
+        {
+            if (fightMusicClip == null) return;
+
+            // increment refcount (no direct control of player's BG music here)
+            s_fightMusicRefCount++;
+        }
+
+        private void StopSharedFightMusicIfNeeded()
+        {
+            if (s_fightMusicRefCount <= 0) return;
+
+            s_fightMusicRefCount = Mathf.Max(0, s_fightMusicRefCount - 1);
         }
     }
 }

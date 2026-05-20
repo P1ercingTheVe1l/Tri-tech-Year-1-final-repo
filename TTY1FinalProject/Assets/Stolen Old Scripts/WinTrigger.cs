@@ -1,46 +1,25 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using AmesGame;
 
-public class WinTrigger : MonoBehaviour
+namespace TTY1
 {
-    [Header("Level Settings")]
-    public string nextSceneName;
-
-    [Header("Gate Settings")]
-    public bool requireKey = true;
-    public bool consumeKeyOnUse = true;
-
-    private void OnTriggerEnter(Collider other)
+    public class WinTrigger : MonoBehaviour
     {
-        if (!other.CompareTag("Player")) return;
+        [Header("Level Settings")]
+        public string nextSceneName;
 
-        var keyHolder = other.GetComponent<KeyHolder>();
-
-        if (requireKey)
+        private void OnTriggerEnter(Collider other)
         {
-            if (keyHolder == null || !keyHolder.HasKey)
+            if (!other.CompareTag("Player")) return;
+
+            if (string.IsNullOrEmpty(nextSceneName))
             {
-                Debug.Log("Gate is locked! Defeat the boss first.");
+                Debug.LogWarning("WinTrigger: nextSceneName is not set.");
                 return;
             }
+
+            Debug.Log("Level Complete!");
+            SceneManager.LoadScene(nextSceneName);
         }
-
-        if (consumeKeyOnUse && keyHolder != null)
-        {
-            keyHolder.HasKey = false;
-
-            var ui = FindObjectOfType<PlayerUI>();
-            if (ui != null)
-                ui.SetHasKey(false);
-        }
-
-        WinLevel();
-    }
-
-    private void WinLevel()
-    {
-        Debug.Log("Level Complete!");
-        SceneManager.LoadScene(nextSceneName);
     }
 }
